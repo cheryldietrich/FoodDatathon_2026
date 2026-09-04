@@ -1,0 +1,121 @@
+---
+title: "Data Exploration"
+format: html
+---
+
+## September 3, 2026 - work in progress
+
+```{r, echo=FALSE}
+#| label: libraries
+
+
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(lubridate)
+#geographic packages
+library(countrycode)
+library(sf)
+library(rnaturalearth)
+library(shiny)
+library(httr2)
+library(jsonlite)
+library(here)
+library(renv)
+
+```
+
+
+```{r, echo=FALSE}
+#| label: load_data
+
+tm <- read_parquet("Data/processed/TM_staples.parquet")
+
+```
+
+#examine the data
+```{r, echo=FALSE}
+#: label: examine the data
+#1) are there any countries with no data for these staples?
+tm |>
+  filter(Value==0) |>
+  select(Year, Reporter.Countries, Element.Code, Item, Element) |>
+  arrange(Year, Reporter.Countries)
+
+#Looking at zeros by Element
+tm |>
+  group_by(Element) |>
+  summarise(
+    n = n(),
+    n_zero = sum(Value == 0, na.rm = TRUE),
+    pct_zero = round(100 * n_zero / n, 2),
+    n_na = sum(is.na(Value))
+  )
+
+#flow consistency check from Claude
+flows <- tm |>
+  select(Reporter.Countries, Partner.Countries, Item, Year, Element, Value) |>
+  pivot_wider(names_from = Element, values_from = Value)
+
+flows |>
+  summarise(
+    export_qty0_val_pos = sum(`Export quantity` == 0 & `Export value` > 0, na.rm = TRUE),
+    export_val0_qty_pos = sum(`Export value` == 0 & `Export quantity` > 0, na.rm = TRUE),
+    import_qty0_val_pos = sum(`Import quantity` == 0 & `Import value` > 0, na.rm = TRUE),
+    import_val0_qty_pos = sum(`Import value` == 0 & `Import quantity` > 0, na.rm = TRUE),
+    total_rows = n()
+  )
+
+
+fq <- tm |>
+   select(Reporter.Countries, Partner.Countries, Item, Year, Element, Value, Flag) |>
+   pivot_wider(names_from = Element, values_from = c(Value, Flag))
+
+cat("Export value (when quantity=0), quantiles:\n")
+fq |> filter(`Value_Export quantity` == 0, `Value_Export value` > 0) |>
+   pull(`Value_Export value`) |> quantile(probs = c(.5, .75, .9, .95, .99, 1)) |> print()
+ 
+cat("\nExport quantity (when value=0), quantiles (tonnes):\n")
+fq |> filter(`Value_Export value` == 0, `Value_Export quantity` > 0) |>
+   pull(`Value_Export quantity`) |> quantile(probs = c(.5, .75, .9, .95, .99, 1)) |> print()
+ 
+cat("\nCount of 'large' anomalies: Export qty>0 with value=0, but qty > 100 tonnes\n")
+big_qty_zero_val <- fq |> filter(`Value_Export value` == 0, `Value_Export quantity` > 100)
+ nrow(big_qty_zero_val)
+ 
+cat("\nSample of large export-quantity/zero-value rows (potential food aid/data issue):\n")
+big_qty_zero_val |>
+   select(Reporter.Countries, Partner.Countries, Item, Year, `Value_Export quantity`) |>
+   arrange(desc(`Value_Export quantity`)) |>
+   slice_head(n = 10) |> print()
+
+
+# Test the document's claim that "trade data are rounded to the nearest metric ton"
+cat("Unit values used for quantity elements:\n")
+tm |> filter(Element %in% c("Export quantity", "Import quantity")) |> distinct(Unit) |> print()
+
+cat("\nSample of Export quantity values to check for sub-tonne decimals:\n")
+tm |> filter(Element == "Export quantity", Value > 0, Value < 1) |>
+  slice_head(n = 10) |>
+  select(Reporter.Countries, Partner.Countries, Item, Year, Value)
+
+```
+
+### Some remaining data cleaning & data exploration questions for this exercise
+1 Do we care about $1,000 or less of trade for a country for staples?
+2 Do we care about 1 tonne or less of trade for a country for staples?
+3 What about mis-matches? 
+    a High quantity exports, low or no export value; 
+    b Low quantity exports, high value
+    c High quantity imports, low or no import value
+    d Low quantity exports, low or no export value
+4 How much of question 3 can be explained by questions 1-2?
+5 Are there yearly averages for values per tonne of each staple and what is the distribution?
+
+
+### To dos:
+1 Need to download the food balance sheet to have the gross food supply as a percentage of reporter country data and use 1% as a meaningful cut-off (still trying to get a reference for this)
+Several terms: gravity analysis, materiality filter, scarcity filter, etc.
+
+2 Use the FBS to normalize and remove meaningless trade amounts

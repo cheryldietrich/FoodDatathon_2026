@@ -1,0 +1,121 @@
+---
+title: "API trial"
+format: html
+---
+### Leftover script for attempted API calls, had repeated 403 with the all data calls, decided to download the whole dataset from the website and filter the item names since years and countries weren't filtered in the API call
+```{r, echo=FALSE}
+#| label: libraries
+
+
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(stringr)
+library(lubridate)
+library(FAOSTAT)
+library(shiny)
+library(httr2)
+library(jsonlite)
+library(keyring)
+library(here)
+library(renv)
+
+```
+
+
+```{r, echo=FALSE}
+#| label: direct_download
+
+#QCL data
+
+
+#TCL data
+
+
+
+```
+
+
+
+```{r, echo=FALSE}
+#| label: Pull_QCL_data
+
+#Pull data on world food staples, topics of interest
+#maize, wheat, rice
+#milk/dairy?, eggs, chicken/pork, beef, 
+
+# shrimp may be one of the global food reliance difference between production and consumption
+#what is the food for shrimp?
+# - Soybean meal for shrimp; fishmeal
+#Insects for food and feed
+
+# 2. Define the historical timeline (1961 to 2024)
+all_years <- 1961:2024
+
+# 3. Create a paced API function that automatically pauses for 1.5 seconds every time it runs
+fetch_single_year_paced <- slowly(
+  \(single_year) {
+    cat(paste("Streaming All Countries for Year:", single_year, "\n"))
+    
+    # Send the authenticated developer API request
+    req_perform(
+      request("https://faostatservices.fao.org/api/v1") |>
+        req_headers("Authorization" = paste("Bearer", get_faostat_headers()["Authorization"])) |>
+        req_body_json(list(
+          domain  = "QCL",               # Crops Production Domain
+          area    = "all",               # Pulls ALL countries simultaneously
+          item    = c("15", "27", "56"), # 15 = Wheat, 27 = Rice, 56 = Maize
+          element = "5510",              # 5510 = Production Quantity (Tonnes)
+          year    = as.character(single_year) # Sliced year-by-year
+        ))
+    ) |>
+    resp_body_string() |>
+    fromJSON() |>
+    as.data.frame()
+  },
+  # This sets your exact pause timer rate (1.5 seconds per loop)
+  rate = rate_delay(pause = 1.5)
+)
+
+# 4. Map your paced function across all years and stack them into a master table
+staples_production <- all_years |>
+  map(fetch_single_year_paced) |>
+  list_rbind()
+
+# 5. View your safely gathered timeline table
+head(staples_production)
+```
+
+
+
+```{r, eval=FALSE}
+
+#Build the live REST request for Crops Production (QCL)
+
+prod_request <- request("https://faostatservices.fao.org/api/v1") |>
+  req_headers(
+    # Safely passes your token as a header string invisibly
+    "Authorization" = paste("Bearer", get_faostat_headers()["Authorization"])
+  ) |>
+  req_body_json(list(
+    domain  = "QCL",               # Crops Production Domain
+    area    = "all",               # ALL countries globally
+    year    = "all",               # ALL historical years
+    item    = c("15", "27", "56"), # 15=Wheat, 27=Rice, 56=Maize
+    element = "5510"               # 5510=Production Quantity (Tonnes)
+  ))
+
+# 3. Perform the live authenticated call (Will NEVER prompt your console!)
+prod_response <- req_perform(prod_request)
+
+# 4. Convert the incoming raw server data directly into a clean R table
+staples_production <- resp_body_string(prod_response) |> 
+  fromJSON() |> 
+  as.data.frame()
+
+# View your live global dataset safely
+head(staples_production)
+
+
+
+```

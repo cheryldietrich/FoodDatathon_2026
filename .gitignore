@@ -1,0 +1,6 @@
+.positron/
+.vscode/*
+/.quarto/
+**/*.quarto_ipynb
+/PA_archive/*
+FBS_Handbook_2025.pdf
