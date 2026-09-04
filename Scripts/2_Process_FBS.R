@@ -28,13 +28,18 @@ FBShist_pqt <- arrow::write_parquet(FBShist_df, sink= here::here('Data', 'raw', 
 
 #filter maize, rice, and wheat
 #FBS has Commodity Item codes which are kind of different from the trade and production codes
+#Current FBS: 2511 = Wheat and products, 2514 = Maize and products, 2807 = Rice and products
 FBS_staples <- FBS_df |> 
-  filter(Item.Code %in% c(2514, 2511, 2807))
+  filter(Item.Code %in% c(2511, 2514, 2807))
 
 arrow::write_parquet(FBS_staples, sink = here::here('Data', 'processed', 'FBS_staples.parquet'))
 
+#IMPORTANT: FAOSTAT changed rice's FBS item code between the historic and current
+#series. Historic FBS uses 2805 ("Rice (Milled Equivalent)") for rice, not 2807
+#(which doesn't exist in the historic file at all). Wheat (2511) and maize (2514)
+#codes are unchanged. Filtering historic on 2807 (as before) silently drops rice.
 FBShist_staples <- FBShist_df |>
-  filter(Item.Code %in% c(2514, 2511, 2807))
+  filter(Item.Code %in% c(2511, 2514, 2805))
 
 arrow::write_parquet(FBShist_staples, sink = here::here('Data', 'processed', 'FBShist_staples.parquet'))
 
