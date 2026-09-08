@@ -101,6 +101,16 @@ world <- world_raw |>
   group_by(iso3) |>
   summarise(name = first(name), geometry = st_union(geometry), .groups = "drop")
 
+# Split any polygon that implicitly crosses the antimeridian (only Russia,
+# here) into proper multi-part pieces on either side of +/-180. Without
+# this, unprojected lon/lat rendering (ggplot coord_sf, leaflet, etc.) draws
+# a spurious sliver connecting Russia's westernmost and easternmost edges
+# straight across the map -- and that sliver also propagates into any
+# st_union() built from Russia, like the USSR reconstruction below. This is
+# a no-op for polygons that don't cross the dateline.
+world <- world |>
+  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=10"), quiet = TRUE)
+
 # -----------------------------------------------------------------------------
 # Standard-country geo table: real polygon, valid for all years (year_start/
 # year_end = NA signals "no time restriction" downstream).
