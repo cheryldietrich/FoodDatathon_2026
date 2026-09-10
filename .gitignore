@@ -5,4 +5,5 @@
 /PA_archive/
 Data/processed/
 Data/raw/
+!Data/raw/metadata/
 FBS_Handbook_2025.pdf
