@@ -1,4 +1,4 @@
-FROM rocker/shiny:4.3.0
+FROM rocker/shiny:4.4.1
 
 # Create a non-root user
 RUN useradd -m -s /sbin/nologin shinyuser

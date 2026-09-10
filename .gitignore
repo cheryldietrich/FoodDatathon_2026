@@ -1,4 +1,5 @@
 .positron/
+.posit/assistant/
 .vscode/*
 /.quarto/
 **/*.quarto_ipynb
