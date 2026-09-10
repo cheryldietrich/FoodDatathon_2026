@@ -12,7 +12,7 @@ here::i_am("app.R")
 # -----------------------------------------------------------------------------
 # Data loaded once at app startup (not reactive -- static inputs to the app).
 # -----------------------------------------------------------------------------
-flows_all <- read_parquet(here("Data", "processed", "TM_flows_tiered.parquet")) |>
+flows_all <- arrow::read_parquet(here("Data", "processed", "TM_flows_tiered.parquet")) |>
   filter(meaningful_partner) |>
   # A handful of rows report a country trading with itself (data artifact,
   # not a real cross-border flow) -- these have zero great-circle distance
@@ -32,12 +32,36 @@ YEAR_RANGE <- range(flows_all$Year)
 # year/staple, so the legend below recomputes real breakpoints from the
 # currently-displayed data rather than hardcoding numbers.
 TIER_LEVELS <- c("Tier 1 (largest)", "Tier 2", "Tier 3", "Tier 4 (smallest)")
-TIER_PAL <- colorFactor("YlOrRd", domain = TIER_LEVELS)
+TIER_PAL <- leaflet::colorFactor("YlOrRd", domain = TIER_LEVELS)
 # Tier 1 (largest) should draw thickest; TIER_LEVELS[1] -> weight 5, [4] -> weight 2.
 TIER_WEIGHT <- setNames(c(5, 4, 3, 2), TIER_LEVELS)
 
 fmt_num <- function(x, digits = 0) format(round(x, digits), big.mark = ",", scientific = FALSE, trim = TRUE)
 fmt_pct <- function(x) ifelse(is.finite(x), paste0(fmt_num(x * 100, 1), "%"), "n/a")
+
+# Pure helpers (no reactive context) shared between the initial renderLeaflet()
+# paint and the later leafletProxy() updates, so the two never drift apart.
+add_flow_layer <- function(map, arcs) {
+  if (is.null(arcs) || nrow(arcs) == 0) return(map)
+  tooltip <- sprintf(
+    "<b>%s \u2192 %s</b><br>Quantity: %s t<br>Value: $%s M<br>%s of %s's domestic supply",
+    arcs$Reporter.Countries, arcs$Partner.Countries,
+    fmt_num(arcs$quantity), fmt_num(arcs$value / 1000, 1),
+    fmt_pct(arcs$materiality_ratio_qty), arcs$Reporter.Countries
+  )
+  map |> addPolylines(
+    data = arcs, group = "flows",
+    color = ~TIER_PAL(tier), weight = ~TIER_WEIGHT[as.character(tier)],
+    opacity = 0.7, label = lapply(tooltip, htmltools::HTML)
+  )
+}
+
+add_legend_layer <- function(map, lc, staple, year) {
+  map |> addLegend(
+    position = "bottomright", colors = lc$colors, labels = lc$labels,
+    title = paste0("Tier (", staple, ", ", year, ")")
+  )
+}
 
 # -----------------------------------------------------------------------------
 # UI
@@ -103,56 +127,53 @@ server <- function(input, output, session) {
   # lines with geosphere::gcIntermediate (breakAtDateLine handles the same
   # antimeridian issue we fixed for the USSR polygon, but for line geometry).
   # Attributes needed for the hover tooltip are carried through per feature.
-  arc_endpoints <- reactive({
-    geo_pts <- geo_active() |>
-      st_drop_geometry() |>
-      select(faostat_area, centroid_lon, centroid_lat)
+  
+arc_endpoints <- reactive({
+  geo_pts <- geo_active() |>
+    st_drop_geometry() |>
+    select(faostat_area, centroid_lon, centroid_lat)
 
-    flows_in <- flows_filtered()
+  flows_in <- flows_filtered()
 
-    df <- flows_in |>
-      inner_join(geo_pts, by = c("Reporter.Countries" = "faostat_area")) |>
-      rename(lon_reporter = centroid_lon, lat_reporter = centroid_lat) |>
-      inner_join(geo_pts, by = c("Partner.Countries" = "faostat_area")) |>
-      rename(lon_partner = centroid_lon, lat_partner = centroid_lat)
+  df <- flows_in |>
+    inner_join(geo_pts, by = c("Reporter.Countries" = "faostat_area")) |>
+    rename(lon_reporter = centroid_lon, lat_reporter = centroid_lat) |>
+    inner_join(geo_pts, by = c("Partner.Countries" = "faostat_area")) |>
+    rename(lon_partner = centroid_lon, lat_partner = centroid_lat)
 
-    # Diagnostic, not user-facing validation: inner_join silently drops any
-    # flow whose reporter/partner isn't in the currently active geography
-    # (e.g. a name mismatch, or a defunct entity trading outside its known
-    # year range). This should be ~0 given today's data (checked manually),
-    # but flags future data drift -- e.g. after rerunning the FAOSTAT bulk
-    # download scripts -- instead of silently dropping flows off the map.
-    dropped <- nrow(flows_in) - nrow(df)
-    if (dropped > 0) {
-      message(sprintf(
-        "arc_endpoints: dropped %d/%d flow rows for Year=%s Item=%s (reporter/partner missing from geo_active)",
-        dropped, nrow(flows_in), input$year, input$staple
-      ))
-    }
+  dropped <- nrow(flows_in) - nrow(df)
+  if (dropped > 0) {
+    message(sprintf(
+      "arc_endpoints: dropped %d/%d flow rows for Year=%s Item=%s",
+      dropped, nrow(flows_in), input$year, input$staple
+    ))
+  }
 
-    if (nrow(df) == 0) return(NULL)
+  if (nrow(df) == 0) return(NULL)
 
-    tier_col <- input$metric
-    lines <- purrr::map(seq_len(nrow(df)), function(i) {
-      gc <- gcIntermediate(
-        c(df$lon_reporter[i], df$lat_reporter[i]),
-        c(df$lon_partner[i], df$lat_partner[i]),
-        n = 50, addStartEnd = TRUE, sp = TRUE, breakAtDateLine = TRUE
-      )
-      st_sf(
-        Reporter.Countries = df$Reporter.Countries[i],
-        Partner.Countries = df$Partner.Countries[i],
-        quantity = df$quantity_milled_equiv[i],
-        value = df$value[i],
-        materiality_ratio_qty = df$materiality_ratio_qty[i],
-        tier = df[[tier_col]][i],
-        geometry = st_geometry(st_as_sf(gc))
-      )
-    })
+  tier_col <- input$metric
 
-    bind_rows(lines) |>
-      st_set_crs(4326) |>
-      mutate(tier = factor(tier, levels = TIER_LEVELS))
+  lines <- purrr::map(seq_len(nrow(df)), function(i) {
+    gc <- gcIntermediate(
+      c(df$lon_reporter[i], df$lat_reporter[i]),
+      c(df$lon_partner[i], df$lat_partner[i]),
+      n = 50, addStartEnd = TRUE, sp = TRUE, breakAtDateLine = TRUE
+    )
+
+    st_sf(
+      Reporter.Countries = df$Reporter.Countries[i],
+      Partner.Countries = df$Partner.Countries[i],
+      quantity = df$quantity_milled_equiv[i],
+      value = df$value[i],
+      materiality_ratio_qty = df$materiality_ratio_qty[i],
+      tier = df[[tier_col]][i],
+      geometry = st_geometry(st_as_sf(gc))
+    )
+  })
+
+   bind_rows(lines) |>
+     st_set_crs(4326) |>
+     mutate(tier = factor(tier, levels = TIER_LEVELS))
   })
 
   # ---- Legend breakpoints: real tonnage/$ range per tier, recomputed from --
@@ -201,6 +222,8 @@ server <- function(input, output, session) {
       )
     geo_changed(FALSE)
   })
+
+
 
   # ---- Flow-line layer + legend: redraw on EVERY year/staple/metric tick ---
   observe({
