@@ -207,7 +207,7 @@ arc_endpoints <- reactive({
   # newer hosted basemap tiles which now gate anonymous use behind a key.
   output$map <- renderLeaflet({
     leaflet() |>
-      addProviderTiles(providers$Esri.WorldGrayCanvas) |>
+      addProviderTiles(providers$Esri.WorldPhysical) |>
       setView(lng = 15, lat = 30, zoom = 2)
   })
 
@@ -218,7 +218,7 @@ arc_endpoints <- reactive({
       clearGroup("polygons") |>
       addPolygons(
         data = geo_active(), group = "polygons",
-        weight = 1, color = "#888888", fillOpacity = 0.05
+        weight = 2, color = "#888888", fillOpacity = 0.05
       )
     geo_changed(FALSE)
   })
