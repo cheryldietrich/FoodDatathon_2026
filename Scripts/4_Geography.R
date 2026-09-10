@@ -117,8 +117,10 @@ world <- world |>
 # -----------------------------------------------------------------------------
 successor_years <- defunct_entities |>
   tidyr::unnest(successor_iso3) |>
-  transmute(iso3 = successor_iso3, inherited_year_start = year_end + 1L)
-
+  transmute(iso3 = successor_iso3, inherited_year_start = year_end + 1L) |>
+  group_by(iso3) |>
+  slice_max(inherited_year_start, n = 1) |> #adjusting this for the repeat of Serbia in Serbia and Serbia & Montenegro
+  ungroup()
 
 geo_standard <- standard_areas |>
   filter(!is.na(iso3)) |>
