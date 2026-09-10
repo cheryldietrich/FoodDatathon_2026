@@ -39,16 +39,30 @@ TIER_WEIGHT <- setNames(c(5, 4, 3, 2), TIER_LEVELS)
 fmt_num <- function(x, digits = 0) format(round(x, digits), big.mark = ",", scientific = FALSE, trim = TRUE)
 fmt_pct <- function(x) ifelse(is.finite(x), paste0(fmt_num(x * 100, 1), "%"), "n/a")
 
+pct_display <- function(arcs) {
+  dplyr::case_when(
+    is.infinite(arcs$materiality_ratio_qty) ~
+      paste0("0 domestic supply of ", tolower(arcs$Item), " recorded for ", arcs$Reporter.Countries),
+    arcs$materiality_ratio_qty > 1 ~
+      paste0(fmt_pct(arcs$materiality_ratio_qty), " of ", arcs$Reporter.Countries, "'s supply (likely re-exported)"),
+    TRUE ~
+      paste0(fmt_pct(arcs$materiality_ratio_qty), " of ", arcs$Reporter.Countries, "'s domestic supply")
+  )
+}
+
+
 # Pure helpers (no reactive context) shared between the initial renderLeaflet()
 # paint and the later leafletProxy() updates, so the two never drift apart.
 add_flow_layer <- function(map, arcs) {
   if (is.null(arcs) || nrow(arcs) == 0) return(map)
+
   tooltip <- sprintf(
-    "<b>%s \u2192 %s</b><br>Quantity: %s t<br>Value: $%s M<br>%s of %s's domestic supply",
-    arcs$Reporter.Countries, arcs$Partner.Countries,
+    "<b>%s \u2192 %s</b><br>Quantity: %s t<br>Value: $%s M<br>%s",
+    arcs$Partner.Countries, arcs$Reporter.Countries,
     fmt_num(arcs$quantity), fmt_num(arcs$value / 1000, 1),
-    fmt_pct(arcs$materiality_ratio_qty), arcs$Reporter.Countries
+    pct_display(arcs)
   )
+
   map |> addPolylines(
     data = arcs, group = "flows",
     color = ~TIER_PAL(tier), weight = ~unname(TIER_WEIGHT[as.character(tier)]),
@@ -67,7 +81,7 @@ add_legend_layer <- function(map, lc, staple, year) {
 # UI
 # -----------------------------------------------------------------------------
 ui <- page_sidebar(
-  title = "Historical Staple Food Flows",
+  title = "Reliance on Individual Trade Partners for Staple Food Imports",
   sidebar = sidebar(
     sliderInput(
       "year", "Year",
@@ -81,9 +95,15 @@ ui <- page_sidebar(
       selected = "tier_qty"
     )
   ),
-  card(
+    card(
     full_screen = TRUE,
-    leafletOutput("map", height = "100%")
+    leafletOutput("map", height = "100%"),
+    tags$div(
+      style = "font-size: 0.75em; color: #888; padding: 6px 10px; border-top: 1px solid #eee;",
+      "Shows import quantity as a share of the importing country's own domestic supply. ",
+      "Imports below 1% of domestic supply were excluded.",
+      "Other trade partners may exist, and effects on global prices or domestic production are not captured here."
+    )
   )
 )
 
@@ -94,11 +114,11 @@ server <- function(input, output, session) {
 
   # ---- geo_active: which polygon set is valid for input$year -----------------
   geo_active <- reactive({
-    geo_lookup |>
-      filter(
-        is.na(year_start) |
-          (input$year >= year_start & input$year <= year_end)
-      )
+      geo_lookup |>
+    filter(
+      is.na(year_start) | input$year >= year_start,
+      is.na(year_end)   | input$year <= year_end
+    )
   })
 
   # Change-detection gate: only true when the *set* of active areas differs
@@ -203,27 +223,51 @@ arc_endpoints <- reactive({
   })
 
   # ---- Initial map draw (base tiles only; layers added via observers) ------
-  # Esri's WorldGrayCanvas requires no API key/account, unlike CartoDB's
-  # newer hosted basemap tiles which now gate anonymous use behind a key.
-  output$map <- renderLeaflet({
-    leaflet() |>
-      addProviderTiles(providers$Esri.WorldPhysical) |>
-      setView(lng = 15, lat = 30, zoom = 2)
-  })
+  # used Esri because it doesn't need an API key and used physical terrain to avoid competing boundaries
+output$map <- renderLeaflet({
+  leaflet(options = leafletOptions(worldCopyJump = FALSE)) |>
+    addProviderTiles(providers$Esri.WorldPhysical) |>   # or whatever you're on now
+    setView(lng = 15, lat = 30, zoom = 2) 
+})
+  
 
   # ---- Polygon layer: redraw ONLY when the active entity set changes -------
-  observeEvent(geo_changed(), {
-    req(geo_changed())
-    leafletProxy("map") |>
-      clearGroup("polygons") |>
-      addPolygons(
-        data = geo_active(), group = "polygons",
-        weight = 2, color = "#888888", fillOpacity = 0.05
-      )
-    geo_changed(FALSE)
-  })
+observeEvent(geo_changed(), {
+  req(geo_changed())
+  leafletProxy("map") |>
+    clearGroup("polygons") |>
+    clearGroup("country-labels") |>
+    addPolygons(
+      data = geo_active(), group = "polygons",
+      weight = 2, color = "#888888", opacity = 0.4, fillOpacity = 0.05
+    ) |>
+    addLabelOnlyMarkers(
+  data = geo_active(), lng = ~centroid_lon, lat = ~centroid_lat,
+  group = "country-labels",
+  label = ~faostat_area,
+  labelOptions = labelOptions(
+    noHide = TRUE, textOnly = TRUE, direction = "center",
+    style = list(
+      "color" = "#555555",
+      "font-size" = "11px",
+      "font-family" = "'Helvetica Neue', Arial, sans-serif",
+      "font-weight" = "400",
+      "opacity" = "0.7"
+    )
+  )
+)
+  geo_changed(FALSE)
+})
 
+observe({
+  req(input$map_zoom)
 
+  if (input$map_zoom >= 4) {
+    leafletProxy("map") |> showGroup("country-labels")
+  } else {
+    leafletProxy("map") |> hideGroup("country-labels")
+  }
+})
 
   # ---- Flow-line layer + legend: redraw on EVERY year/staple/metric tick ---
   observe({
@@ -238,12 +282,13 @@ arc_endpoints <- reactive({
       # Absolute numbers in the tooltip (tonnes, $ millions), plus the one
       # genuinely relative figure we have on hand: this flow's share of the
       # importing country's domestic supply (materiality_ratio_qty).
-      tooltip <- sprintf(
-        "<b>%s \u2192 %s</b><br>Quantity: %s t<br>Value: $%s M<br>%s of %s's domestic supply",
-        arcs$Reporter.Countries, arcs$Partner.Countries,
-        fmt_num(arcs$quantity), fmt_num(arcs$value / 1000, 1),
-        fmt_pct(arcs$materiality_ratio_qty), arcs$Reporter.Countries
-      )
+
+  tooltip <- sprintf(
+    "<b>%s \u2192 %s</b><br>Quantity: %s t<br>Value: $%s M<br>%s",
+    arcs$Partner.Countries, arcs$Reporter.Countries,
+    fmt_num(arcs$quantity), fmt_num(arcs$value / 1000, 1),
+    pct_display(arcs)
+  )
 
       proxy <- proxy |>
         addPolylines(
