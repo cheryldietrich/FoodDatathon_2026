@@ -51,7 +51,7 @@ add_flow_layer <- function(map, arcs) {
   )
   map |> addPolylines(
     data = arcs, group = "flows",
-    color = ~TIER_PAL(tier), weight = ~TIER_WEIGHT[as.character(tier)],
+    color = ~TIER_PAL(tier), weight = ~unname(TIER_WEIGHT[as.character(tier)]),
     opacity = 0.7, label = lapply(tooltip, htmltools::HTML)
   )
 }
@@ -248,7 +248,7 @@ arc_endpoints <- reactive({
       proxy <- proxy |>
         addPolylines(
           data = arcs, group = "flows",
-          color = ~TIER_PAL(tier), weight = ~TIER_WEIGHT[as.character(tier)],
+          color = ~TIER_PAL(tier), weight = ~unname(TIER_WEIGHT[as.character(tier)]),
           opacity = 0.7, label = lapply(tooltip, htmltools::HTML)
         )
     }
