@@ -5,7 +5,7 @@ library(countrycode)
 library(here)
 library(arrow)
 
-here::i_am("Scripts/5_Geography.R")
+here::i_am("Scripts/4_Geography.R")
 
 # -----------------------------------------------------------------------------
 # All FAOSTAT area names appearing in the trade data (reporter or partner),
@@ -115,11 +115,22 @@ world <- world |>
 # Standard-country geo table: real polygon, valid for all years (year_start/
 # year_end = NA signals "no time restriction" downstream).
 # -----------------------------------------------------------------------------
+successor_years <- defunct_entities |>
+  tidyr::unnest(successor_iso3) |>
+  transmute(iso3 = successor_iso3, inherited_year_start = year_end + 1L)
+
+
 geo_standard <- standard_areas |>
   filter(!is.na(iso3)) |>
   left_join(world, by = "iso3") |>
-  filter(!is.na(name)) |>  # drop any iso3 codes rnaturalearth doesn't carry a polygon for
-  transmute(faostat_area = Area, year_start = NA_integer_, year_end = NA_integer_, geometry)
+  filter(!is.na(name)) |>
+  left_join(successor_years, by = "iso3") |>
+  transmute(
+    faostat_area = Area,
+    year_start = inherited_year_start,   # NA for non-successors, inherited value for successors
+    year_end = NA_integer_,
+    geometry
+  )
 
 missing_polygon <- standard_areas |> filter(!is.na(iso3)) |>
   anti_join(world, by = "iso3")
