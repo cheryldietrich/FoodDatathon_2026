@@ -6,4 +6,10 @@
 Data/processed/
 Data/raw/
 !Data/raw/metadata/
+
+
+# Docker-specific
+.dockerignore
+
+
 FBS_Handbook_2025.pdf
