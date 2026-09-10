@@ -45,9 +45,12 @@ FBShist_staples <- FBShist_df |>
 
 arrow::write_parquet(FBShist_staples, sink = here::here('Data', 'processed', 'FBShist_staples.parquet'))
 
+#Fix metadata encoding for the historic data
 
+FBShist_AC <- read.csv(here('Data','raw', 'metadata', 'FoodBalanceSheetsHistoric_E_AreaCodes.csv'), fileEncoding = "Latin1")
+write.csv(FBShist_AC, here('Data','raw', 'metadata', 'FoodBalanceSheetsHistoric_E_AreaCodes.csv'), row.names = FALSE)
 
 #Clearing memory for the Trade Matrix
-rm(FBS_df, FBShist_df, FBS_pqt, FBShist_pqt, FBS_staples, FBShist_staples)
+rm(FBS_df, FBShist_df, FBS_pqt, FBShist_pqt, FBS_staples, FBShist_staples, FBShist_AC)
 
 gc()
