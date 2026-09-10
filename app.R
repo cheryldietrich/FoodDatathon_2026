@@ -171,10 +171,10 @@ arc_endpoints <- reactive({
     )
   })
 
-   bind_rows(lines) |>
-     st_set_crs(4326) |>
-     mutate(tier = factor(tier, levels = TIER_LEVELS))
-  })
+  bind_rows(lines) |>
+    st_set_crs(4326) |>
+    mutate(tier = factor(tier, levels = TIER_LEVELS))
+})
 
   # ---- Legend breakpoints: real tonnage/$ range per tier, recomputed from --
   # the currently-displayed flows (tier definitions are relative/quartile,
