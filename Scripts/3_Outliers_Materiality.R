@@ -4,7 +4,7 @@ library(arrow)
 library(here)
 library(stringr)
 
-here::i_am("Scripts/4_Outliers_Materiality.R")
+here::i_am("Scripts/3_Outliers_Materiality.R")
 
 # -----------------------------------------------------------------------------
 # Load staples data
