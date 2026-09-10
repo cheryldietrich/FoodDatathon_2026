@@ -7,9 +7,11 @@ library(here)
 
 here::i_am("Scripts/2_Process_FBS.R")
 
+#FBS downloaded Sept 10, 2026 from here: https://bulks-faostat.fao.org/production/FoodBalanceSheets_E_All_Data_(Normalized).zip
+#FBS History downloaded September 10, 2026 from here: https://bulks-faostat.fao.org/production/FoodBalanceSheetsHistoric_E_All_Data_(Normalized).zip
 #unzip from downloaded file
-#unzip(here('Data', 'raw', 'FoodBalanceSheets_E_All_Data_(Normalized).zip'), exdir=here('Data', 'raw', 'metadata'))
-#unzip(here('Data', 'raw', 'FoodBalanceSheetsHistoric_E_All_Data_(Normalized).zip'), exdir=here('Data', 'raw', 'metadata'))
+unzip(here('Data', 'raw', 'FoodBalanceSheets_E_All_Data_(Normalized).zip'), exdir=here('Data', 'raw', 'metadata'))
+unzip(here('Data', 'raw', 'FoodBalanceSheetsHistoric_E_All_Data_(Normalized).zip'), exdir=here('Data', 'raw', 'metadata'))
 
 #move the non-meta data to the raw data folder
 file.rename(from = here('Data', 'raw', 'metadata', 'FoodBalanceSheets_E_All_Data_(Normalized).csv'), to = here('Data', 'raw', 'FoodBalanceSheets_E_All_Data_(Normalized).csv'))

@@ -2,5 +2,7 @@
 .vscode/*
 /.quarto/
 **/*.quarto_ipynb
-/PA_archive/*
+/PA_archive/
+Data/processed/
+Data/raw/
 FBS_Handbook_2025.pdf

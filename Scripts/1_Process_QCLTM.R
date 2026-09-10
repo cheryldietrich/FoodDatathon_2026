@@ -5,7 +5,12 @@ library(here)
 
 here::i_am("Scripts/1_Process_QCLTM.R")
 
-#bulk_QCL <- unzip('./Production_Crops_Livestock_E_All_Data_(Normalized).zip')
+#QCL data downloaded August 27, 2026 from: https://bulks-faostat.fao.org/production/Production_Crops_Livestock_E_All_Data_(Normalized).zip
+
+unzip(here('Data', 'raw', 'Production_Crops_Livestock_E_All_Data_(Normalized).zip'), exdir=here('Data', 'raw', 'metadata'))
+#move the non-meta data to the raw data folder
+file.rename(from = here('Data', 'raw', 'metadata', 'Production_Crops_Livestock_E_All_Data_(Normalized).csv'), to = here('Data', 'raw', 'Production_Crops_Livestock_E_All_Data_(Normalized).csv'))
+
 
 QCL_df <- read.csv(here('Data', 'raw', 'Production_Crops_Livestock_E_All_Data_(Normalized).csv'))
 QCL_pqt <- arrow::write_parquet(QCL_df, sink = here::here('Data', 'raw', "QCL_pqt.parquet"))
@@ -20,6 +25,13 @@ arrow::write_parquet(QCL_staples, sink = here::here('Data', 'processed', 'QCL_st
 rm(QCL_df)
 rm(QCL_pqt)
 rm(QCL_staples)
+
+#Trade Matrix data downloaded August 27, 2026 from: https://bulks-faostat.fao.org/production/Trade_DetailedTradeMatrix_E_All_Data_(Normalized).zip
+unzip(here('Data', 'raw', 'Trade_DetailedTradeMatrix_E_All_Data_(Normalized).zip'), exdir=here('Data', 'raw', 'metadata'))
+#move the non-meta data to the raw data folder
+file.rename(from = here('Data', 'raw', 'metadata', 'Trade_DetailedTradeMatrix_E_All_Data_(Normalized).csv'), to = here('Data', 'raw', 'Trade_DetailedTradeMatrix_E_All_Data_(Normalized).csv'))
+
+#bulk_TM <- unzip('./Trade_DetailedTradeMatrix_E_All_Data_(Normalized).zip')
 
 TM_df <- read.csv(here::here('Data', 'raw', 'Trade_DetailedTradeMatrix_E_All_Data_(Normalized).csv'))
 
