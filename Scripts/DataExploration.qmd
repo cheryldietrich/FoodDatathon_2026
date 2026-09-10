@@ -3,7 +3,7 @@ title: "Data Exploration"
 format: html
 ---
 
-## September 3, 2026 - work in progress
+## September 3, 2026 - work in progress - scratchpad script
 
 ```{r, echo=FALSE}
 #| label: libraries
