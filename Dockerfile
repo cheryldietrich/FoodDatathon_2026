@@ -12,7 +12,9 @@ WORKDIR /home/shinyuser/app
 
 # Copy renv files first (for better Docker layer caching)
 COPY --chown=shinyuser:shinyuser renv.lock .
+COPY --chown=shinyuser:shinyuser renv/ ./renv/
 COPY --chown=shinyuser:shinyuser .Rprofile .
+
 
 # Restore packages using renv while still as root
 # (renv needs to write to the package cache)
