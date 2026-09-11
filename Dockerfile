@@ -4,9 +4,9 @@ FROM --platform=linux/amd64 rocker/shiny:4.6.1
 RUN useradd -m -s /sbin/nologin shinyuser
 
 # Install system dependencies (if needed)
-RUN apt-get update && apt-get install -y \
-    # add any system deps your R packages need \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
+
 
 WORKDIR /home/shinyuser/app
 
@@ -15,7 +15,11 @@ COPY --chown=shinyuser:shinyuser renv.lock .
 COPY --chown=shinyuser:shinyuser renv/ ./renv/
 COPY --chown=shinyuser:shinyuser .Rprofile .
 
+ENV RENV_CONFIG_REPOS_OVERRIDE=https://packagemanager.posit.co/cran/__linux__/jammy/latest
+ENV NOT_CRAN=true
+ENV ARROW_R_DEV=true
 
+RUN R -e "renv::restore()"
 # Restore packages using renv while still as root
 # (renv needs to write to the package cache)
 RUN R -e "renv::restore()"
